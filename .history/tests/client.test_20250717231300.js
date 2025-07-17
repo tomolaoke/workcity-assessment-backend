@@ -1,0 +1,53 @@
+const request = require('supertest');
+const express = require('express');
+const mongoose = require('mongoose');
+const Client = require('../models/Client');
+const clientRoutes = require('../routes/clients');
+const User = require('../models/User');
+const connectDB = require('../config/db');
+require('dotenv').config();
+
+const app = express();
+app.use(express.json());
+app.use('/api/clients', clientRoutes);
+
+describe('Client API', () => {
+  let token;
+
+  beforeAll(async () => {
+    await connectDB();
+  });
+
+  beforeEach(async () => {
+    await mongoose.connection.collection('users').deleteMany({});
+    await mongoose.connection.collection('clients').deleteMany({});
+
+    const user = new User({
+      email: `test${Date.now()}@example.com`, // randomized to prevent dup error
+      password: 'password123',
+      role: 'user',
+    });
+    await user.save();
+    token = require('jsonwebtoken').sign({ id: user._id, role: user.role }, process.env.JWT_SECRET);
+  });
+
+  afterAll(async () => {
+    await mongoose.connection.db.dropDatabase();
+    await mongoose.connection.close();
+  });
+
+  test('POST /api/clients - Create a client', async () => {
+    const response = await request(app)
+      .post('/api/clients')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Test Client',
+        email: 'client@example.com',
+        phone: '1234567890',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toHaveProperty('_id');
+    expect(response.body.name).toBe('Test Client');
+  });
+});
